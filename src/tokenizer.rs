@@ -2,9 +2,9 @@
 
 use std::{mem, vec};
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 #[repr(u8)]
-pub(crate) enum TokenType {
+pub enum TokenType {
     Ampersand = b'&',
     Asterisk = b'*',
     At = b'@',
@@ -110,40 +110,29 @@ pub(crate) const fn is_unescapable(t: TokenType) -> bool {
 }
 
 #[inline(always)]
-pub(crate) const fn is_word_delimiter(t: TokenType) -> bool {
-    match t {
-        // whitespaces
-        TokenType::Space => true,
-        TokenType::Tab => true,
-        TokenType::Newline => true,
-        TokenType::Cr => true,
-        TokenType::Feed => true,
-
-        // non-whitespaces
-        TokenType::Ampersand => true,
-        TokenType::Asterisk => true,
-        TokenType::Bang => true,
-        TokenType::Comma => true,
-        TokenType::Colon => true,
-        TokenType::Semicolon => true,
-        TokenType::OpenParenthesis => true,
-        TokenType::CloseParenthesis => true,
-        TokenType::OpenSquare => true,
-        TokenType::CloseSquare => true,
-        TokenType::SingleQuote => true,
-        TokenType::DoubleQuote => true,
-        TokenType::Plus => true,
-        TokenType::Pipe => true,
-        TokenType::Tilde => true,
-        TokenType::Greater => true,
-        TokenType::Equals => true,
-        TokenType::Dollar => true,
-        TokenType::Caret => true,
-        TokenType::Slash => true,
-
-        // others all considered not word delimiters.
-        _ => false,
-    }
+pub(crate) fn is_word_delimiter(t: u8) -> bool {
+    is_whitespace(t)
+        || t == TokenType::Ampersand.into()
+        || t == TokenType::Asterisk.into()
+        || t == TokenType::Bang.into()
+        || t == TokenType::Comma.into()
+        || t == TokenType::Colon.into()
+        || t == TokenType::Semicolon.into()
+        || t == TokenType::OpenParenthesis.into()
+        || t == TokenType::CloseParenthesis.into()
+        || t == TokenType::OpenSquare.into()
+        || t == TokenType::CloseSquare.into()
+        || t == TokenType::SingleQuote.into()
+        || t == TokenType::DoubleQuote.into()
+        || t == TokenType::Plus.into()
+        || t == TokenType::Pipe.into()
+        || t == TokenType::Tilde.into()
+        || t == TokenType::Greater.into()
+        || t == TokenType::Equals.into()
+        || t == TokenType::Dollar.into()
+        || t == TokenType::Caret.into()
+        || t == TokenType::Slash.into()
+    // others all considered not word delimiters.
 }
 
 #[inline(always)]
@@ -158,14 +147,11 @@ pub(crate) const fn is_hex(ch: u8) -> bool {
 
 #[inline(always)]
 pub(crate) fn is_whitespace(ch: u8) -> bool {
-    match ch.into() {
-        TokenType::Space => true,
-        TokenType::Tab => true,
-        TokenType::Newline => true,
-        TokenType::Cr => true,
-        TokenType::Feed => true,
-        _ => false,
-    }
+    ch == TokenType::Space.into()
+        || ch == TokenType::Tab.into()
+        || ch == TokenType::Newline.into()
+        || ch == TokenType::Cr.into()
+        || ch == TokenType::Feed.into()
 }
 
 #[inline(always)]
@@ -184,7 +170,7 @@ fn consume_escape(css: &[u8], start: usize) -> usize {
     let char_codes = css;
     assert!(char_codes.len() > next + 1);
     let mut code = char_codes[next + 1];
-    if is_unescapable(code.into()) {
+    if is_unescapable(code.try_into().unwrap()) {
         // just consume the escape char
     } else if is_hex(code) {
         let mut hex_digits = 0;
@@ -219,7 +205,7 @@ fn consume_word(css: &[u8], start: usize) -> usize {
 
     loop {
         let code = char_codes[next];
-        if is_word_delimiter(code.into()) {
+        if is_word_delimiter(code) {
             return next - 1;
         } else if code == TokenType::Backslash.into() {
             next = consume_escape(css, next) + 1;
@@ -237,14 +223,23 @@ fn consume_word(css: &[u8], start: usize) -> usize {
 
 pub(crate) type Range = (usize, usize);
 
-struct Token {
-    r#type: TokenType,
-    line: Range,
-    col: Range,
-    pos: Range,
+pub struct Token {
+    pub r#type: TokenType,
+    pub line: Range,
+    pub col: Range,
+    pub pos: Range,
 }
 
-pub(crate) struct Tokenizer<'a> {
+impl ToString for Token {
+    fn to_string(&self) -> String {
+        format!(
+            "[{:?}, ({:?}), ({:?}), ({:?})]",
+            self.r#type, self.line, self.col, self.pos
+        )
+    }
+}
+
+pub struct Tokenizer<'a> {
     input: &'a str,
     css: &'a [u8],
 
@@ -256,7 +251,7 @@ pub(crate) struct Tokenizer<'a> {
 }
 
 impl<'a> Tokenizer<'a> {
-    fn new(input: &'a str, safe: Option<bool>) -> Self {
+    pub fn new(input: &'a str, safe: Option<bool>) -> Self {
         Tokenizer {
             input,
             css: input.as_bytes(),
@@ -269,7 +264,7 @@ impl<'a> Tokenizer<'a> {
     }
 
     #[inline(always)]
-    fn unclosed(&mut self, what: &str, fix: &str) {
+    pub(crate) fn unclosed(&mut self, what: &str, fix: &str) {
         if self.safe {
             // fyi: this is never set to true.
             // css += fix;
@@ -286,7 +281,7 @@ impl<'a> Tokenizer<'a> {
         }
     }
 
-    pub(crate) fn tokenize(&mut self) {
+    pub fn tokenize(&mut self) -> Vec<Token> {
         let mut tokens: Vec<Token> = vec![];
 
         let length = self.css.len();
@@ -311,8 +306,8 @@ impl<'a> Tokenizer<'a> {
                 self.line += 1;
             }
 
-            match <TokenType>::from(code) {
-                _ if is_whitespace(code.into()) => {
+            match code {
+                _ if is_whitespace(code) => {
                     next = self.start;
 
                     loop {
@@ -333,7 +328,12 @@ impl<'a> Tokenizer<'a> {
                     end = next;
                 }
 
-                TokenType::Plus | TokenType::Greater | TokenType::Tilde | TokenType::Pipe => {
+                ch @ _
+                    if ch == u8::from(TokenType::Plus)
+                        || ch == u8::from(TokenType::Greater)
+                        || ch == u8::from(TokenType::Tilde)
+                        || ch == u8::from(TokenType::Pipe) =>
+                {
                     next = self.start;
                     loop {
                         next += 1;
@@ -354,21 +354,23 @@ impl<'a> Tokenizer<'a> {
                     end = next;
                 }
                 // Consume these characters as single tokens.
-                TokenType::Asterisk
-                | TokenType::Ampersand
-                | TokenType::Bang
-                | TokenType::Comma
-                | TokenType::Equals
-                | TokenType::Dollar
-                | TokenType::Caret
-                | TokenType::OpenSquare
-                | TokenType::CloseSquare
-                | TokenType::Colon
-                | TokenType::Semicolon
-                | TokenType::OpenParenthesis
-                | TokenType::CloseParenthesis => {
+                ch @ _
+                    if ch == u8::from(TokenType::Asterisk)
+                        || ch == u8::from(TokenType::Ampersand)
+                        || ch == u8::from(TokenType::Bang)
+                        || ch == u8::from(TokenType::Comma)
+                        || ch == u8::from(TokenType::Equals)
+                        || ch == u8::from(TokenType::Dollar)
+                        || ch == u8::from(TokenType::Caret)
+                        || ch == u8::from(TokenType::OpenSquare)
+                        || ch == u8::from(TokenType::CloseSquare)
+                        || ch == u8::from(TokenType::Colon)
+                        || ch == u8::from(TokenType::Semicolon)
+                        || ch == u8::from(TokenType::OpenParenthesis)
+                        || ch == u8::from(TokenType::CloseParenthesis) =>
+                {
                     next = self.start;
-                    token_type = code.into();
+                    token_type = code.try_into().unwrap();
                     end_line = self.line;
                     end_column = self.start - self.offset;
                     end = next + 1;
@@ -438,7 +440,7 @@ impl<'a> Tokenizer<'a> {
                         end_column = next - next_offset.unwrap();
                     } else if code == TokenType::Slash.into() {
                         next = self.start;
-                        token_type = code.into();
+                        token_type = code.try_into().unwrap();
                         end_line = self.line;
                         end_column = self.start - self.offset;
                         end = next + 1;
@@ -469,6 +471,8 @@ impl<'a> Tokenizer<'a> {
 
             self.start = end;
         }
+
+        tokens
     }
 }
 
