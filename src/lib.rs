@@ -1,3 +1,6 @@
+pub mod tokenizer;
+pub mod types;
+
 #[cfg(test)]
 mod tests {
     #[test]
