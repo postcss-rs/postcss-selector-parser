@@ -292,8 +292,6 @@ impl<'a> Tokenizer<'a> {
         let length = self.css.len();
         let mut end = 0;
 
-        let mut next = 0;
-
         let mut code;
         let mut end_column = 0;
         let mut end_line = 0;
@@ -351,7 +349,7 @@ impl<'a> Tokenizer<'a> {
                     }
 
                     token_type = TokenType::Combinator;
-                    end_line = line;
+                    end_line = self.line;
                     end_column = self.start - self.offset;
                     end = next;
                 }
@@ -371,7 +369,7 @@ impl<'a> Tokenizer<'a> {
                 | TokenType::CloseParenthesis => {
                     next = self.start;
                     token_type = code.into();
-                    end_line = line;
+                    end_line = self.line;
                     end_column = self.start - self.offset;
                     end = next + 1;
                 }
@@ -401,7 +399,7 @@ impl<'a> Tokenizer<'a> {
                         }
 
                         token_type = TokenType::SingleQuote;
-                        end_line = line;
+                        end_line = self.line;
                         end_column = self.start - self.offset;
                         end = next + 1;
                     }
@@ -426,28 +424,28 @@ impl<'a> Tokenizer<'a> {
                         let lines = x.collect::<Vec<&str>>();
                         last = lines.len() - 1;
                         if last > 0 {
-                            next_line = line + last;
+                            next_line = self.line + last;
                             next_offset = Some(next - lines[last].len());
                         } else {
-                            next_line = line;
+                            next_line = self.line;
                             next_offset = Some(self.offset);
                         }
                         drop(lines);
 
                         token_type = TokenType::Comment;
-                        line = next_line;
+                        self.line = next_line;
                         end_line = next_line;
                         end_column = next - next_offset.unwrap();
                     } else if code == TokenType::Slash.into() {
                         next = self.start;
                         token_type = code.into();
-                        end_line = line;
+                        end_line = self.line;
                         end_column = self.start - self.offset;
                         end = next + 1;
                     } else {
                         next = consume_word(self.css, self.start);
                         token_type = TokenType::Word;
-                        end_line = line;
+                        end_line = self.line;
                         end_column = next - self.offset;
                     }
 
@@ -458,7 +456,7 @@ impl<'a> Tokenizer<'a> {
             // Ensure that the token structure remains consistent
             tokens.push(Token {
                 r#type: token_type,
-                line: (line, end_line),
+                line: (self.line, end_line),
                 col: (self.start - self.offset, end_column),
                 pos: (self.start, end),
             });
