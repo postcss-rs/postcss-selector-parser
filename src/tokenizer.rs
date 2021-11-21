@@ -144,13 +144,15 @@ pub(crate) const fn is_hex(ch: u8) -> bool {
     }
 }
 
-#[inline]
+#[inline(always)]
 pub(crate) fn is_whitespace(ch: u8) -> bool {
-    ch == TokenType::Space.into()
-        || ch == TokenType::Tab.into()
-        || ch == TokenType::Newline.into()
-        || ch == TokenType::Cr.into()
-        || ch == TokenType::Feed.into()
+    // TODO(CGQAQ): if
+    // ch == TokenType::Space.into()
+    //     || ch == TokenType::Tab.into()
+    //     || ch == TokenType::Newline.into()
+    //     || ch == TokenType::Cr.into()
+    //     || ch == TokenType::Feed.into()
+    ch.is_ascii_whitespace()
 }
 
 #[inline(always)]
