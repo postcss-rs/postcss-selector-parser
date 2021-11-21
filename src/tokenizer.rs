@@ -1,5 +1,6 @@
 #![allow(unused_variables, dead_code)]
 
+use std::fmt::{Formatter, Pointer, Write};
 use std::{mem, vec};
 
 #[derive(Copy, Clone, Debug)]
@@ -55,61 +56,59 @@ impl From<TokenType> for u8 {
 }
 
 const fn is_char_valid_token(ch: u8) -> bool {
-    match ch {
-        _ if ch == b'&' => true,
-        _ if ch == b'*' => true,
-        _ if ch == b'@' => true,
-        _ if ch == b',' => true,
-        _ if ch == b':' => true,
-        _ if ch == b';' => true,
-        _ if ch == b'(' => true,
-        _ if ch == b')' => true,
-        _ if ch == b'[' => true,
-        _ if ch == b']' => true,
-        _ if ch == b'$' => true,
-        _ if ch == b'~' => true,
-        _ if ch == b'^' => true,
-        _ if ch == b'+' => true,
-        _ if ch == b'=' => true,
-        _ if ch == b'|' => true,
-        _ if ch == b'>' => true,
-        _ if ch == b' ' => true,
-        _ if ch == b'\'' => true,
-        _ if ch == b'"' => true,
-        _ if ch == b'/' => true,
-        _ if ch == b'!' => true,
-
-        _ if ch == b'\\' => true,
-        _ if ch == b'\r' => true,
-        _ if ch == 0x0C => true, // \f
-        _ if ch == b'\n' => true,
-        _ if ch == b'\t' => true,
-
+    let comment = u8::MAX;
+    let word = u8::MAX - 1;
+    let combinator = u8::MAX - 2;
+    matches!(
+        ch,
+        b'&' | b'*'
+            | b'@'
+            | b','
+            | b':'
+            | b';'
+            | b'('
+            | b')'
+            | b'['
+            | b']'
+            | b'$'
+            | b'~'
+            | b'^'
+            | b'+'
+            | b'='
+            | b'|'
+            | b'>'
+            | b' '
+            | b'\''
+            | b'"'
+            | b'/'
+            | b'!'
+            | b'\\'
+            | b'\r'
+            | 0x0C // \f
+            | b'\n'
+            | b'\t',
+    )
         // TODO(CGQAQ): Maybe not return true?
-        _ if ch == u8::MAX => true,
-        _ if ch == u8::MAX - 1 => true,
-        _ if ch == u8::MAX - 2 => true,
-
-        _ => false,
-    }
+        || ch == comment
+        || ch == word
+        || ch == combinator
 }
 
 ///
 /// Check if a char is not allowed to escape
 /// * return true if it's not allowed to escape.
 ///
-#[inline(always)]
-pub(crate) const fn is_unescapable(t: TokenType) -> bool {
-    match t {
-        TokenType::Tab => true,
-        TokenType::Newline => true,
-        TokenType::Cr => true,
-        TokenType::Feed => true,
-        _ => false,
-    }
+#[inline]
+pub(crate) fn is_unescapable(ch: u8) -> bool {
+    ch == TokenType::Tab.into()
+        || ch == TokenType::Newline.into()
+        || ch == TokenType::Cr.into()
+        || ch == TokenType::Tab.into()
+        || ch == TokenType::Newline.into()
+        || ch == TokenType::Cr.into()
 }
 
-#[inline(always)]
+#[inline]
 pub(crate) fn is_word_delimiter(t: u8) -> bool {
     is_whitespace(t)
         || t == TokenType::Ampersand.into()
@@ -135,7 +134,7 @@ pub(crate) fn is_word_delimiter(t: u8) -> bool {
     // others all considered not word delimiters.
 }
 
-#[inline(always)]
+#[inline]
 pub(crate) const fn is_hex(ch: u8) -> bool {
     match ch {
         b'0'..=b'9' => true,
@@ -145,7 +144,7 @@ pub(crate) const fn is_hex(ch: u8) -> bool {
     }
 }
 
-#[inline(always)]
+#[inline]
 pub(crate) fn is_whitespace(ch: u8) -> bool {
     ch == TokenType::Space.into()
         || ch == TokenType::Tab.into()
@@ -224,17 +223,20 @@ fn consume_word(css: &[u8], start: usize) -> usize {
 pub(crate) type Range = (usize, usize);
 
 pub struct Token {
-    pub r#type: TokenType,
+    pub ty: TokenType,
     pub line: Range,
     pub col: Range,
     pub pos: Range,
 }
 
-impl ToString for Token {
-    fn to_string(&self) -> String {
-        format!(
-            "[{:?}, ({:?}), ({:?}), ({:?})]",
-            self.r#type, self.line, self.col, self.pos
+impl std::fmt::Debug for Token {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(
+            format!(
+                "[{:?}, ({:?}), ({:?}), ({:?})]",
+                self.ty, self.line, self.col, self.pos,
+            )
+            .as_str(),
         )
     }
 }
@@ -269,6 +271,7 @@ impl<'a> Tokenizer<'a> {
             // fyi: this is never set to true.
             // css += fix;
             // next = css.length - 1;
+            // TODO(CGQAQ): Maybe some pretty print? or better error handling.
             unreachable!("Tokenizer safe option should never set to true.")
         } else {
             panic!(
@@ -329,10 +332,10 @@ impl<'a> Tokenizer<'a> {
                 }
 
                 ch @ _
-                    if ch == u8::from(TokenType::Plus)
-                        || ch == u8::from(TokenType::Greater)
-                        || ch == u8::from(TokenType::Tilde)
-                        || ch == u8::from(TokenType::Pipe) =>
+                    if ch == TokenType::Plus.into()
+                        || ch == TokenType::Greater.into()
+                        || ch == TokenType::Tilde.into()
+                        || ch == TokenType::Pipe.into() =>
                 {
                     next = self.start;
                     loop {
@@ -355,19 +358,19 @@ impl<'a> Tokenizer<'a> {
                 }
                 // Consume these characters as single tokens.
                 ch @ _
-                    if ch == u8::from(TokenType::Asterisk)
-                        || ch == u8::from(TokenType::Ampersand)
-                        || ch == u8::from(TokenType::Bang)
-                        || ch == u8::from(TokenType::Comma)
-                        || ch == u8::from(TokenType::Equals)
-                        || ch == u8::from(TokenType::Dollar)
-                        || ch == u8::from(TokenType::Caret)
-                        || ch == u8::from(TokenType::OpenSquare)
-                        || ch == u8::from(TokenType::CloseSquare)
-                        || ch == u8::from(TokenType::Colon)
-                        || ch == u8::from(TokenType::Semicolon)
-                        || ch == u8::from(TokenType::OpenParenthesis)
-                        || ch == u8::from(TokenType::CloseParenthesis) =>
+                    if ch == TokenType::Asterisk.into()
+                        || ch == TokenType::Ampersand.into()
+                        || ch == TokenType::Bang.into()
+                        || ch == TokenType::Comma.into()
+                        || ch == TokenType::Equals.into()
+                        || ch == TokenType::Dollar.into()
+                        || ch == TokenType::Caret.into()
+                        || ch == TokenType::OpenSquare.into()
+                        || ch == TokenType::CloseSquare.into()
+                        || ch == TokenType::Colon.into()
+                        || ch == TokenType::Semicolon.into()
+                        || ch == TokenType::OpenParenthesis.into()
+                        || ch == TokenType::CloseParenthesis.into() =>
                 {
                     next = self.start;
                     token_type = code.try_into().unwrap();
@@ -457,7 +460,7 @@ impl<'a> Tokenizer<'a> {
 
             // Ensure that the token structure remains consistent
             tokens.push(Token {
-                r#type: token_type,
+                ty: token_type,
                 line: (self.line, end_line),
                 col: (self.start - self.offset, end_column),
                 pos: (self.start, end),

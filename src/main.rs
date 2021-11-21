@@ -13,7 +13,7 @@ fn main() {
     println!("{}s", (t1.elapsed().as_millis() as f32) / 1000f32);
 
     // for t in tokens.iter() {
-    //     print!("{}", t.to_string());
+    //     print!("{:?}", t);
     //     println!("{}", &input[t.pos.0..t.pos.1])
     // }
 
