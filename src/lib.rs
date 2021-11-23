@@ -1,5 +1,7 @@
+pub mod parser;
 pub mod tokenizer;
 pub mod types;
+mod util;
 
 #[cfg(test)]
 mod tests {
